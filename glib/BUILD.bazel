@@ -1,0 +1,277 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@rules_cc_autoconf//autoconf:autoconf.bzl", "autoconf")
+load("@rules_cc_autoconf//autoconf:autoconf_hdr.bzl", "autoconf_hdr")
+load("@version_info//:version.bzl", "version")
+
+bool_flag(name = "sysprof",
+          build_setting_default = False)
+
+
+
+autoconf_hdr(
+    name = "gen_glibconfig_conf",
+    out = "glibconfig.h",
+    template = "glibconfig.h.in",
+    deps= ["//:glibconfig_conf"]
+)
+
+cc_library(name = "glibconfig",
+           hdrs = ["glibconfig.h"],
+           includes = ["."]
+)
+
+
+# TODO, turn sysprof into #define HAVE_SYSPROF=1/0
+
+# TODO following variable depends on compiler setup
+have_good_vsnprintf = False
+have_good_snprintf = False
+have_good_printf = False
+
+use_system_printf = have_good_vsnprintf and have_good_snprintf and have_good_printf
+
+genrule(
+    name="gen_gversionmacros",
+    srcs = ["gversionmacros.h.in"],
+    outs= ["gversionmacros.h"],
+    tools = ["//tools:gen_visibility_macros"],
+    cmd =  "$(location //tools:gen_visibility_macros) \"{}\" versions-macros $< $@".format(version),
+)
+
+genrule(
+    name="gen_glib_visibility",
+    outs= ["glib-visibility.h"],
+    tools = ["//tools:gen_visibility_macros"],
+    cmd =  "$(location //tools:gen_visibility_macros) \"{}\" visibility-macros GLIB $@".format(version),
+)
+
+
+
+
+
+glib_deprecated_sources = [
+  'deprecated/gallocator.c',
+  'deprecated/gallocator.h',
+  'deprecated/gcache.c',
+  'deprecated/gcompletion.c',
+  'deprecated/grel.c',
+  'deprecated/gthread-deprecated.c'
+]
+
+glib_headers = [
+  'glib.h',
+  'glib-object.h',
+]
+
+glib_deprecated_headers = [
+  'deprecated/gallocator.h',
+  'deprecated/gcache.h',
+  'deprecated/gcompletion.h',
+  'deprecated/gmain.h',
+  'deprecated/grel.h',
+  'deprecated/gthread.h',
+]
+
+glib_sources = [
+  'garcbox.c',
+  'garray.c',
+  'gasyncqueue.c',
+  'gatomic.c',
+  'gbacktrace.c',
+  'gbase64.c',
+  'gbitlock.c',
+  'gbookmarkfile.c',
+  'gbytes.c',
+  'gcharset.c',
+  'gchecksum.c',
+  'gconvert.c',
+  'gdataset.c',
+  'gdate.c',
+  'gdatetime.c',
+  'gdatetime-private.c',
+  'gdir.c',
+  'genviron.c',
+  'gerror.c',
+  'gfileutils.c',
+  'ggettext.c',
+  'ghash.c',
+  'ghmac.c',
+  'ghook.c',
+  'ghostutils.c',
+  'giochannel.c',
+  'gkeyfile.c',
+  'glib-init.c',
+  'glib-private.c',
+  'glist.c',
+  'gmain.c',
+  'gmappedfile.c',
+  'gmarkup.c',
+  'gmem.c',
+  'gmessages.c',
+  'gnode.c',
+  'goption.c',
+  'gpathbuf.c',
+  'gpattern.c',
+  'gpoll.c',
+  'gprimes.c',
+  'gqsort.c',
+  'gquark.c',
+  'gqueue.c',
+  'grand.c',
+  'grcbox.c',
+  'grefcount.c',
+  'grefstring.c',
+  'gregex.c',
+  'gscanner.c',
+  'gsequence.c',
+  'gshell.c',
+  'gslice.c',
+  'gslist.c',
+  'gspawn.c',
+  'gstdio.c',
+  'gstrfuncs.c',
+  'gstring.c',
+  'gstringchunk.c',
+  'gstrvbuilder.c',
+  'gtestutils.c',
+  'gthread.c',
+  'gthreadpool.c',
+  'gtimer.c',
+  'gtimezone.c',
+  'gtrace.c',
+  'gtranslit.c',
+  'gtrashstack.c',
+  'gtree.c',
+  'guniprop.c',
+  'gutf8.c',
+  'gunibreak.c',
+  'gunicollate.c',
+  'gunidecomp.c',
+  'guri.c',
+  'gutils.c',
+  'guuid.c',
+  'gvariant.c',
+  'gvariant-core.c',
+  'gvariant-parser.c',
+  'gvariant-serialiser.c',
+  'gvarianttypeinfo.c',
+  'gvarianttype.c',
+  'gversion.c',
+  'gwakeup.c',
+  'gprint.c',
+  'gprintf.c',
+]
+
+glib_sub_headers = [
+  'glib-autocleanups.h',
+  'glib-typeof.h',
+  'galloca.h',
+  'garray.h',
+  'gasyncqueue.h',
+  'gatomic.h',
+  'gbacktrace.h',
+  'gbase64.h',
+  'gbitlock.h',
+  'gbookmarkfile.h',
+  'gbytes.h',
+  'gcharset.h',
+  'gchecksum.h',
+  'gconvert.h',
+  'gdataset.h',
+  'gdate.h',
+  'gdatetime.h',
+  'gdir.h',
+  'genviron.h',
+  'gerror.h',
+  'gfileutils.h',
+  'ggettext.h',
+  'ghash.h',
+  'ghmac.h',
+  'ghook.h',
+  'ghostutils.h',
+  'gi18n.h',
+  'gi18n-lib.h',
+  'giochannel.h',
+  'gkeyfile.h',
+  'glist.h',
+  'gmacros.h',
+  'gmain.h',
+  'gmappedfile.h',
+  'gmarkup.h',
+  'gmem.h',
+  'gmessages.h',
+  'gnode.h',
+  'goption.h',
+  'gpathbuf.h',
+  'gpattern.h',
+  'gpoll.h',
+  'gprimes.h',
+  'gqsort.h',
+  'gquark.h',
+  'gqueue.h',
+  'grand.h',
+  'grcbox.h',
+  'grefcount.h',
+  'grefstring.h',
+  'gregex.h',
+  'gscanner.h',
+  'gsequence.h',
+  'gshell.h',
+  'gslice.h',
+  'gslist.h',
+  'gspawn.h',
+  'gstdio.h',
+  'gstrfuncs.h',
+  'gstrvbuilder.h',
+  'gtestutils.h',
+  'gstring.h',
+  'gstringchunk.h',
+  'gthread.h',
+  'gthreadpool.h',
+  'gtimer.h',
+  'gtimezone.h',
+  'gtrashstack.h',
+  'gtree.h',
+  'gtypes.h',
+  'guuid.h',
+  'gunicode.h',
+  'guri.h',
+  'gutils.h',
+  'gvarianttype.h',
+  'gvariant.h',
+  'gversion.h',
+  'gprintf.h',
+]
+
+glib_priv_headers = [
+    "gvalgrind.h",
+    "valgrind.h",
+    "grcboxprivate.h",
+    "glib-private.h",
+    "glib-init.h",
+    "gasyncqueueprivate.h",
+    "gcharsetprivate.h",
+]
+
+glib_built_headers = ["gversionmacros.h", "glib-visibility.h"]
+
+cc_library(name = "sub_headers",
+           hdrs = glib_sub_headers + glib_built_headers,
+           include_prefix = "glib",
+)
+
+host_os_srcs = select({
+        "@platforms//os:linux": ["gjournal-private.c", "gjournal-private.h"],
+        #TODO
+        "//conditions:default": [],
+    })
+
+# TODO dtrace
+
+cc_library(name="glib-2.0",
+           srcs = glib_sources + glib_deprecated_sources + host_os_srcs,
+           hdrs = glib_headers + glib_priv_headers,
+           local_defines = ['G_LOG_DOMAIN="GLib"', "GLIB_COMPILATION"],
+           deps = ["//:config","sub_headers","glibconfig"],
+)
