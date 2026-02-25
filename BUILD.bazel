@@ -1,83 +1,11 @@
-load("@rules_cc_autoconf//autoconf:package_info.bzl", "package_info")
-load("@rules_cc_autoconf//autoconf:autoconf.bzl", "autoconf")
-load("@rules_cc_autoconf//autoconf:autoconf_hdr.bzl", "autoconf_hdr")
-load("@rules_cc_autoconf//autoconf:checks.bzl", "checks")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load(":defs.bzl", "get_package_info")
-load("@version_info//:version.bzl", "major_version","minor_version","micro_version")
+load(":defs.bzl", "gen_glib_conf")
 
 
-interface_age = 0 if minor_version %2 == 1 else micro_version
-binary_age = 100 * minor_version + micro_version
+gen_glib_conf()
 
 
 # TODO 
 # define USE_SYSTEM_PRINTF use_system_printf
 # define GLIB_USING_SYSTEM_PRINTF use_system_printf
 
-package_info(
-    name = "package_info",
-    module_bazel = "//:MODULE.bazel",
-    package_bugreport = '"https://gitlab.gnome.org/GNOME/glib/issues/new"',
-    package_tarname = '"glib"',
-    package_url = '""',
-)
 
-
-autoconf(
-    name = "glib_conf",
-    checks = [
-        checks.AC_DEFINE("GETTEXT_PACKAGE",value ='glib20'),
-        checks.AC_DEFINE("ENABLE_NLS"),
-        checks.AC_DEFINE("GLIB_MAJOR_VERSION", major_version),
-        checks.AC_DEFINE("GLIB_MINOR_VERSION", minor_version),
-        checks.AC_DEFINE("GLIB_MICRO_VERSION", micro_version),
-        checks.AC_DEFINE("GLIB_INTERFACE_AGE", interface_age),
-        checks.AC_DEFINE("GLIB_BINARY_AGE", binary_age),
-    ],
-)
-
-genrule(name="empty",outs=["config.h.in"],cmd="touch $@")
-
-autoconf_hdr(
-    name = "gen_config",
-    out = "config.h",
-    deps = [
-        "glib_conf",
-        "package_info"
-    ],
-    template = "config.h.in",
-)
-
-cc_library(
-    name="config",
-    hdrs = ["config.h"],
-    srcs = [],
-    visibility = ["//visibility:public"],
-)
-
-soversion = 0
-
-
-autoconf(
-    name = "glibconfig_conf",
-    checks = [
-        checks.AC_DEFINE("LT_CURRENT_MINUS_AGE", soversion),
-        checks.AC_DEFINE("G_HAVE_FREE_SIZED", 0),
-        checks.AC_CHECK_FUNC("stpcpy",define = "HAVE_STPCPY"),
-        
-        # TODO glib_build_static_only
-    ] + select(
-        {"@platforms//os:windows":[
-            checks.AC_DEFINE_UNQUOTED("G_PLATFORM_WIN32"),
-            checks.AC_DEFINE_UNQUOTED("G_OS_WIN32")
-            ],
-         # cygwin not supported?
-            #"@platforms//os:cygwin":[
-            #checks.AC_DEFINE_UNQUOTED("G_OS_UNIX"),
-            #checks.AC_DEFINE_UNQUOTED("G_WITH_CYGWIN"),
-
-            #],
-            "//conditions:default":[checks.AC_DEFINE_UNQUOTED("G_OS_UNIX")]}),
-        visibility = ["//visibility:public"],
-)

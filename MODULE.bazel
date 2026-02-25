@@ -11,3 +11,11 @@ bazel_dep(name = "rules_python", version = "1.9.0-rc1")
 bazel_dep(name = "platforms", version = "1.0.0")
 version_ext = use_extension("//:version_extension.bzl", "version_extension")
 use_repo(version_ext, "version_info")
+
+
+#bazel_dep(name = "meson", version = "1.5.1")
+
+#local_path_override(
+#    module_name = "meson",
+#    path = "/home/comicfans/project/bazel-central-registry/modules/meson/1.5.1",
+#)

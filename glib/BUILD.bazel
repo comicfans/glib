@@ -1,7 +1,7 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@rules_cc_autoconf//autoconf:autoconf.bzl", "autoconf")
-load("@rules_cc_autoconf//autoconf:autoconf_hdr.bzl", "autoconf_hdr")
+load("@rules_cc_autoconf//autoconf:meson_hdr.bzl", "meson_hdr")
 load("@version_info//:version.bzl", "version")
 
 bool_flag(name = "sysprof",
@@ -9,7 +9,7 @@ bool_flag(name = "sysprof",
 
 
 
-autoconf_hdr(
+meson_hdr(
     name = "gen_glibconfig_conf",
     out = "glibconfig.h",
     template = "glibconfig.h.in",

@@ -434,7 +434,6 @@ headers = [
   'strings.h',
   'sys/auxv.h',
   'sys/event.h',
-  'sys/uio.h',
   'sys/filio.h',
   'sys/inotify.h',
   'sys/mkdev.h',
