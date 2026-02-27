@@ -6,13 +6,13 @@
     "//:version_extension.bzl%version_extension": {
       "general": {
         "bzlTransitiveDigest": "nMt2nnchC/8G9QPYe6x5D/xoavMR7kevtN+Lo6If1GY=",
-        "usagesDigest": "kPuaIZ2HXrQzvWU1TpfU+EtrlaTiUhb4Qi92pjWJ0AI=",
+        "usagesDigest": "tHbTPOgYn0o/qHA0Cz5OI4qKLPUU6bjmpw0yG5ckc5c=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
           "version_info": {
             "repoRuleId": "@@//:version_extension.bzl%version_repo",
             "attributes": {
-              "version": "2.87.2"
+              "version": "2.87.3"
             }
           }
         }
