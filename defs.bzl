@@ -320,13 +320,54 @@ def gen_glib_conf():
         for check_type in ["char","int","short","long","long long","size_t"]
     ]+ [checks.AC_CHECK_SIZEOF("void*", define = "SIZEOF_VOID_P"),
         checks.AC_CHECK_SIZEOF("ssize_t", define = "SIZEOF_SSIZE_T", includes = ["#include <unistd.h>"]),
-        checks.AC_CHECK_SIZEOF("wchar_t", define = "SIZEOF_WCHAR_T", includes = ["#include <stddef.h>"])]
+        checks.AC_CHECK_SIZEOF("wchar_t", define = "SIZEOF_WCHAR_T", includes = ["#include <stddef.h>"]),
+    ]
+
 
 
 
     #always required
 
     always_required = [checks.AC_DEFINE(key, value = 1) for key in ["HAVE_DCGETTEXT", "HAVE_GETTEXT"]]
+
+
+
+    # TODO linux libmount
+    # TODO linux selinux
+    # TODO support libxattr
+
+
+    xattr_nofollow = '''
+                 #include <stdio.h>
+                 #ifdef HAVE_SYS_TYPES_H
+                 #include <sys/types.h>
+                 #endif
+                 #ifdef HAVE_SYS_XATTR_H
+                 #include <sys/xattr.h>
+                 #elif HAVE_ATTR_XATTR_H
+                 #include <attr/xattr.h>
+                 #endif
+
+                 int main (void) {
+                   ssize_t len = getxattr("", "", NULL, 0, 0, XATTR_NOFOLLOW);
+                   return len;
+                 }
+    '''
+
+
+
+    xattr_checks = [
+        checks.AC_CHECK_FUNC(function = "getxattr",code = '''
+                             "include <sys/xattr.h>"
+                             int main(){
+                             getxattr();
+                             }
+        ''',define = "HAVE_SYS_XATTR_H"),
+        checks.AC_TRY_COMPILE(code = xattr_nofollow, compile_defines = ["HAVE_SYS_XATTR_H"], requires = ["HAVE_SYS_XATTR_H"],define = "HAVE_XATTR_NOFOLLOW"),
+    ]
+
+    # TODO assert HAVE_SYS_XATTR_H is 1
+
 
 
 
@@ -348,13 +389,26 @@ def gen_glib_conf():
             langinfo_altmon,
             langinfo_abaltmon,
             langinfo_time_codeset,
-        ]+functions_checks + header_checks + header_cond_checks + exeext + sizeof_checks + always_required,
+
+            #TODO glib use runtime strlcpy check which is not friendly to cross compile (https://bugzilla.gnome.org/show_bug.cgi?id=53933 Solaris 8), here we simply treat it as BSD compliant
+            checks.AC_DEFINE("HAVE_STRLCPY"),
+
+            #TODO, glib use runtime check to determine if 
+            #"/proc/self/cmdline", O_RDONLY|O_BINARY can be read
+            checks.AC_DEFINE("HAVE_PROC_SELF_CMDLINE"),
+
+        ]+functions_checks + header_checks + header_cond_checks + exeext + sizeof_checks + always_required + xattr_checks + 
+            # TODO sunos XOPEN_SOURCE __EXTENSIONS__
+
+        [checks.AC_CHECK_TYPE("PTRACE_O_EXITKILL", includes = ["#include <sys/ptrace.h>"], define = "HAVE_PTRACE_O_EXITKILL")]
+        ,
+
+        #  TODO dtrace
 
         # TODO meson only check has_header for headers (preprocess only)
     )
 
-    # TODO linux libmount
-
+    
 
     meson_hdr(
         name = "gen_glib_conf",
@@ -372,6 +426,40 @@ def gen_glib_conf():
         visibility = ["//visibility:public"],
     )
 
+    
+    # endian check
+    endian_checks = [checks.AC_TRY_COMPILE(code = '''
+    #if defined(__BYTE_ORDER__)
+        typedef char array[__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ ? 1: - 1];
+    
+    #elif defined(__APPLE__)
+        #include <TargetConditionals.h>
+        #if defined(__LITTLE_ENDIAN__)
+        #else
+            #error fail compile for big endian
+        #endif
+    #else
+        // win32 or other os, assume little endian
+    #endif
+        ''',name = "IS_LITTLE_ENDIAN"),
+                     checks.AC_DEFINE("g_byte_order",condition = "IS_LITTLE_ENDIAN", if_true = "G_LITTLE_ENDIAN", if_false = "G_BIG_ENDIAN"),
+                     checks.AC_DEFINE("g_bs_native",condition = "IS_LITTLE_ENDIAN",if_true = "LE", if_false = "BE"),
+                     checks.AC_DEFINE("g_bs_alien",condition = "IS_LITTLE_ENDIAN",if_true = "BE", if_false = "LE"),
+    ]
+
+
+    func_checks = [
+        checks.AC_CHECK_HEADER("alloca.h",define = "GLIB_HAVE_ALLOCA_H"),
+    ]
+
+
+    type_checks = [
+        checks.AC_CHECK_SIZEOF("short"),
+        #TODO check int size
+        checks.AC_DEFINE("gint16", condition = "ac_cv_sizeof_short==2", if_true = "short",if_false = "int"),
+
+
+    ]
 
 
     autoconf(
@@ -386,7 +474,7 @@ def gen_glib_conf():
             checks.AC_DEFINE("GLIB_MICRO_VERSION", micro_version),
 
             # TODO glib_build_static_only
-        ] + select(
+        ] + func_checks + endian_checks + type_checks + select(
             {"@platforms//os:windows":[
                 checks.AC_DEFINE_UNQUOTED("G_PLATFORM_WIN32"),
                 checks.AC_DEFINE_UNQUOTED("G_OS_WIN32")
@@ -398,5 +486,5 @@ def gen_glib_conf():
 
              #],
             "//conditions:default":[checks.AC_DEFINE_UNQUOTED("G_OS_UNIX")]}),
-            visibility = ["//visibility:public"],
+            visibility = ["//visibility:public"] ,
     )

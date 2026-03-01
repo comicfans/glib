@@ -2,7 +2,6 @@ module(name="glib", version= "2.87.3")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_cc_autoconf", version = "0.5.3")
-
 local_path_override(module_name="rules_cc_autoconf",path="../rules_cc_autoconf")
 
 bazel_dep(name = "pcre2", version = "10.45")
@@ -11,11 +10,3 @@ bazel_dep(name = "rules_python", version = "1.9.0-rc1")
 bazel_dep(name = "platforms", version = "1.0.0")
 version_ext = use_extension("//:version_extension.bzl", "version_extension")
 use_repo(version_ext, "version_info")
-
-
-#bazel_dep(name = "meson", version = "1.5.1")
-
-#local_path_override(
-#    module_name = "meson",
-#    path = "/home/comicfans/project/bazel-central-registry/modules/meson/1.5.1",
-#)

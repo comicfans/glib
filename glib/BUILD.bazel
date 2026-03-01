@@ -269,9 +269,15 @@ host_os_srcs = select({
 
 # TODO dtrace
 
+cc_library(name = "glib_header",
+           srcs = [],
+           hdrs = glib_headers + glib_priv_headers,
+           include_prefix = "glib",
+           includes = ["."],
+)
+
 cc_library(name="glib-2.0",
            srcs = glib_sources + glib_deprecated_sources + host_os_srcs,
-           hdrs = glib_headers + glib_priv_headers,
            local_defines = ['G_LOG_DOMAIN="GLib"', "GLIB_COMPILATION"],
-           deps = ["//:config","sub_headers","glibconfig"],
+           deps = ["//:config","sub_headers","glibconfig", "glib_header"],
 )
