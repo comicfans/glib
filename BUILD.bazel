@@ -1,7 +1,39 @@
+load("@bazel_skylib//lib:selects.bzl", "selects")
 load(":defs.bzl", "gen_glib_conf")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 
+load("@rules_cc_autoconf//autoconf:checks.bzl", "checks")
+load("@rules_cc_autoconf//autoconf:autoconf.bzl", "autoconf")
 
+# check if stack growing up, depends on target architecture and os
+# False should be fine for most x86/arm
+bool_flag(name = "growing_stack", build_setting_default = False)
+
+config_setting(name = "growing_stack_setting",
+               flag_values = {
+                   ":growing_stack": "true",
+               },
+)
+
+config_setting(
+        name = "windows_x86_64",
+        constraint_values = [
+            "@platforms//os:windows",
+            "@platforms//cpu:x86_64",
+        ],
+)
+config_setting(
+        name = "windows_arm64",
+        constraint_values = [
+            "@platforms//os:windows",
+            "@platforms//cpu:arm64",
+        ],
+    )
+
+selects.config_setting_group(
+        name = "windows_x86_64_or_arm64",
+        match_any = [":windows_x86_64", ":windows_arm64"],
+    )
 
 
 gen_glib_conf()

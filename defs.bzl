@@ -4,23 +4,257 @@ load("@rules_cc_autoconf//autoconf:autoconf.bzl", "autoconf")
 load("@rules_cc_autoconf//autoconf:autoconf_hdr.bzl", "autoconf_hdr")
 load("@rules_cc_autoconf//autoconf:meson_hdr.bzl", "meson_hdr")
 load("@rules_cc_autoconf//autoconf:checks.bzl", "checks")
+load("@rules_cc_autoconf//autoconf:checks.bzl", "macros")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@version_info//:version.bzl", "major_version","minor_version","micro_version")
 
-def _get_package_info(ctx):
-    infos = ctx.attr["package_target"]["define_results"]
+int64_m = 'll'
 
-    #package_version = 
+def gen_type_checks():
+
+    
+    check_size = ["short","int", "long","long long", "size_t", "void*"]
+    check_align = ["int", "long", "long long"]
+
+    ret = [checks.AC_CHECK_SIZEOF(t) for t in check_size] +[checks.AC_CHECK_ALIGNOF(t) for t in check_align] 
+
+    ret += [
+    checks.AC_CHECK_SIZEOF("ssize_t", includes = ["#include <unistd.h>"])
+    ]
+
+    ret += macros.AC_DEFINE_EXPR(define = ["glib_void_p","glib_long","glib_size_t", "glib_ssize_t"], expr = '''
+glib_void_p = ac_cv_sizeof_voidp
+glib_long = ac_cv_sizeof_long
+glib_size_t = ac_cv_sizeof_size_t
+glib_ssize_t = ac_cv_sizeof_ssize_t
+    ''', requires = ["ac_cv_sizeof_voidp", "ac_cv_sizeof_long", "ac_cv_sizeof_size_t", "ac_cv_sizeof_ssize_t"])
+
+    ret += macros.AC_DEFINE_EXPR(define = ["long_long_size_equal_to_long_size"],
+                          expr = '''
+long_long_size_equal_to_long_size = int(ac_cv_sizeof_long == ac_cv_sizeof_long_long)
+                          ''',
+    requires = ["ac_cv_sizeof_long", "ac_cv_sizeof_long_long"])
+
+
+    ret += [checks.AC_TRY_COMPILE(code = '''
+#if defined(_AIX) && !defined(__GNUC__)
+#pragma options langlvl=stdc99
+#endif
+#pragma GCC diagnostic error "-Wincompatible-pointer-types"
+#include <stdint.h>
+#include <stdio.h>
+int main () {
+  int64_t i1 = 1;
+  long *i2 = &i1;
+  (void) i2;
+  return 1;
+}''', name = "int64_t_is_long", requires = ["long_long_size_equal_to_long_size"],
+    ),
+checks.AC_TRY_COMPILE(code = '''
+#if defined(_AIX) && !defined(__GNUC__)
+                      #pragma options langlvl=stdc99
+                      #endif
+                      #pragma GCC diagnostic error "-Wincompatible-pointer-types"
+                      #include <stdint.h>
+                      #include <stdio.h>
+                      int main () {
+                        int64_t i1 = 1;
+                        long long *i2 = &i1;
+                        (void) i2;
+                        return 1;
+                      }
+''', name = "int64_t_is_long_long", requires = ["long_long_size_equal_to_long_size"],
+    )
+    ]
+
+    ret += macros.AC_DEFINE_EXPR(["gint16",
+                              "gint16_modifier",
+                              "gint16_format",
+                              "guint16_format"], expr = '''
+if ac_cv_sizeof_short==2:
+    gint16 = 'short'
+    gint16_modifier='"h"'
+    gint16_format='"hi"'
+    guint16_format='"hu"'
+elif ac_cv_sizeof_int == 2:
+    gint16 = 'int'
+    gint16_modifier='""'
+    gint16_format='"i"'
+    guint16_format='"u"'
+else:
+    assert False, "Compiler provides no native 16-bit integer type"
+                             ''', requires = ["ac_cv_sizeof_int","ac_cv_sizeof_short"]) 
+
+    ret +=  macros.AC_DEFINE_EXPR(["gint32","gint32_modifier","gint32_format","guint32_format", "guint32_align"],expr = '''
+if ac_cv_sizeof_short == 4:
+    gint32 = 'short'
+    gint32_modifier='"h"'
+    gint32_format='"hi"'
+    guint32_format='"hu"'
+    guint32_align = short_align
+elif ac_cv_sizeof_int == 4:
+    gint32 = 'int'
+    gint32_modifier='""'
+    gint32_format='"i"'
+    guint32_format='"u"'
+    guint32_align = ALIGNOF_INT 
+elif ac_cv_sizeof_long == 4:
+    gint32 = 'long'
+    gint32_modifier='"l"'
+    gint32_format='"li"'
+    guint32_format='"lu"'
+    guint32_align = ALIGNOF_LONG
+else:
+    assert False, 'Compiler provides no native 32-bit integer type'
+''',
+                                                                                                                 requires = ["ac_cv_sizeof_short",
+"ac_cv_sizeof_int", "ac_cv_sizeof_long", "ALIGNOF_INT"])
+
+
+    ret += macros.AC_DEFINE_EXPR(
+    define = ["gint64","gint64_modifier","gint64_format","guint64_format","glib_extension", "gint64_constant", "guint64_constant","guint64_align"],
+    expr = '''
+if ac_cv_sizeof_int == 8:
+    gint64 = 'int'
+    gint64_modifier='""'
+    gint64_format='"i"'
+    guint64_format='"u"'
+    glib_extension=''
+    gint64_constant='(val)'
+    guint64_constant='(val)'
+    guint64_align = ALIGNOF_INT
+elif ac_cv_sizeof_long == 8 and (ac_cv_sizeof_long_long != ac_cv_sizeof_long or int64_t_is_long):
+    gint64 = 'long'
+    glib_extension=''
+    gint64_modifier='"l"'
+    gint64_format='"li"'
+    guint64_format='"lu"'
+    gint64_constant='(val##L)'
+    guint64_constant='(val##UL)'
+    guint64_align = ALIGNOF_LONG
+elif long_long_size == 8 and (ac_cv_sizeof_long_long != ac_cv_long_size or int64_t_is_long_long):
+    gint64 = 'long long'
+    glib_extension='G_GNUC_EXTENSION '
+    gint64_modifier=int64_m
+    gint64_format=int64_m + 'i'
+    guint64_format=int64_m + 'u'
+    gint64_constant='(G_GNUC_EXTENSION (val##LL))'
+    guint64_constant='(G_GNUC_EXTENSION (val##ULL))'
+    guint64_align = ALIGNOF_LONG_LONG
+else:
+    assert False, 'Compiler provides no native 64-bit integer type'
+    ''',
+    requires = ["ac_cv_sizeof_int", "ac_cv_sizeof_long", "ac_cv_sizeof_long_long", "long_long_size_equal_to_long_size","int64_t_is_long","int64_t_is_long_long","ALIGNOF_LONG","ALIGNOF_LONG_LONG"])
+
+    g_sizet_try_type = ["short", "int", "long", "long long"]
+
+    for t in g_sizet_try_type:
+        ret += [checks.AC_TRY_COMPILE(code = '''
+#include <stddef.h>
+        static size_t f (size_t *i) { return *i + 1; }
+        int main (void) {
+          unsigned  ''' + t + '''  i = 0;
+          f (&i);
+          return 0;
+        }
+        ''', 
+                                   # TODO pass -Werror argument
+        define = ('g_sizet_compatibility_{}'.format(t)).replace(' ','_'))]
+    
+
+    ret += macros.AC_DEFINE_EXPR(define = ["glib_size_type_define","gsize_modifier", "gssize_modifier","gsize_format","gssize_format","glib_msize_type"], requires = [("g_sizet_compatibility_{}".format(t)).replace(' ','_') for t in g_sizet_try_type] + [("ac_cv_sizeof_{}".format(t)).replace(' ','_') for t in g_sizet_try_type + ["size_t"]], expr = '''
+if g_sizet_compatibility_short and ac_cv_sizeof_short == ac_cv_sizeof_size_t:
+    glib_size_type_define = "short"
+    gsize_modifier='"h"'
+    gssize_modifier='"h"'
+    gsize_format ='"hu"'
+    gssize_format ='"hi"'
+    glib_msize_type='SHRT'
+elif g_sizet_compatibility_int and ac_cv_sizeof_int == ac_cv_sizeof_size_t:
+    glib_size_type_define = "int"
+    gsize_modifier='""'
+    gssize_modifier='""'
+    gsize_format ='"u"'
+    gssize_format ='"i"'
+    glib_msize_type='INT'
+elif g_sizet_compatibility_long and ac_cv_sizeof_long == ac_cv_sizeof_size_t:
+    glib_size_type_define = "long"
+    gsize_modifier='"l"'
+    gssize_modifier='"l"'
+    gsize_format ='"lu"'
+    gssize_format ='"li"'
+    glib_msize_type='LONG'
+elif g_sizet_compatibility_long_long and ac_cv_sizeof_long_long == ac_cv_sizeof_size_t:
+    glib_size_type_define = "long long"
+    gsize_modifier='"{0}"'
+    gssize_modifier='"{0}"'
+    gsize_format ='"{0}u"'
+    gssize_format ='"{0}i"'
+    glib_msize_type='INT64'
+else:
+    assert False,'Could not determine size of size_t.'
+                                 '''.format(int64_m))
+
+
+    ret += macros.AC_DEFINE_EXPR(
+        define = ["glib_intptr_type_define","gintptr_modifier",
+        "gintptr_format","guintptr_format","glib_gpi_cast","glib_gpui_cast"],
+        requires = ["ac_cv_sizeof_voidp","ac_cv_sizeof_int","ac_cv_sizeof_long",
+        "ac_cv_sizeof_long_long"],expr = '''
+if ac_cv_sizeof_voidp == ac_cv_sizeof_int:
+    glib_intptr_type_define = "int"
+    gintptr_modifier = '""'
+    gintptr_format = '"i"'
+    guintptr_format = '"u"'
+    glib_gpi_cast = '(gint)'
+    glib_gpui_cast = '(guint)'
+elif ac_cv_sizeof_voidp == ac_cv_sizeof_long:
+    glib_intptr_type_define = "long"
+    gintptr_modifier = '"l"'
+    gintptr_format = '"li"'
+    guintptr_format = '"lu"'
+    glib_gpi_cast = '(glong)'
+    glib_gpui_cast = '(gulong)'
+elif ac_cv_sizeof_voidp == ac_cv_sizeof_long_long:
+    glib_intptr_type_define = "long long"
+    gintptr_modifier = '"{0}"'
+    gintptr_format = '"{0}i"'
+    guintptr_format = '"{0}u"'
+    glib_gpi_cast = '(gint64)'
+    glib_gpui_cast = '(guint64)'
+else:
+    assert False,'Could not determine size of void *'
+        '''.format(int64_m)
+    )
+
+    ret += macros.AC_DEFINE_EXPR(define = ["ac_cv_has_64bit_type"],requires = ["ac_cv_sizeof_{}".format(t) for t in ["long","long_long","int"]], expr = '''
+if ac_cv_sizeof_long != 8 and ac_cv_sizeof_long_long != 8 and ac_cv_sizeof_int != 8:
+    assert False, 'GLib requires a 64-bit type. You might want to consider using the GNU C compiler.'
+else:
+    ac_cv_has_64bit_type = 1
+    ''')
+
+    ret += macros.AC_DEFINE_EXPR(define = ["gintbits","glongbits","gsizebits","gssizebits"], requires = ["ac_cv_sizeof_{}".format(t) for t in ["int","long","size_t","ssize_t"]], expr = '''
+gintbits = ac_cv_sizeof_int * 8
+glongbits = ac_cv_sizeof_long * 8
+gsizebits = ac_cv_sizeof_size_t * 8
+gssizebits = ac_cv_sizeof_ssize_t * 8
+    ''')
+
+    ret += select(
+        {
+            # TODO cygwin
+            "@platforms//os:windows": [checks.AC_DEFINE("g_module_suffix",value="dll")],
+            "//conditions:default":[checks.AC_DEFINE("g_module_suffix",value='"so"')]
+        }
+    )
+
+    return ret
+ 
 
 def check_header_or_func(func):
     return checks.AC_CHECK_FUNC(func, define = define_name(func))
 
-get_package_info = rule(
-    implementation = _get_package_info,
-    attrs = {
-        "package_target": attr.label(providers = [CcAutoconfInfo]),
-    },
-)
 
 def define_name(header):
     return "HAVE_" + header.upper().replace(".","_").replace("/","_")
@@ -305,7 +539,7 @@ def gen_glib_conf():
                 check_header_or_func("if_nametoindex")]
             })
 
-    print(functions_checks)
+    #print(functions_checks)
     
     header_checks = [check_header_or_func(h) for h in headers]
 
@@ -441,10 +675,10 @@ def gen_glib_conf():
     #else
         // win32 or other os, assume little endian
     #endif
-        ''',name = "IS_LITTLE_ENDIAN"),
-                     checks.AC_DEFINE("g_byte_order",condition = "IS_LITTLE_ENDIAN", if_true = "G_LITTLE_ENDIAN", if_false = "G_BIG_ENDIAN"),
-                     checks.AC_DEFINE("g_bs_native",condition = "IS_LITTLE_ENDIAN",if_true = "LE", if_false = "BE"),
-                     checks.AC_DEFINE("g_bs_alien",condition = "IS_LITTLE_ENDIAN",if_true = "BE", if_false = "LE"),
+        ''',name = "ac_cv_is_little_endian"),
+                     checks.AC_DEFINE("g_byte_order",condition = "ac_cv_is_little_endian", if_true = "G_LITTLE_ENDIAN", if_false = "G_BIG_ENDIAN"),
+                     checks.AC_DEFINE("g_bs_native",condition = "ac_cv_is_little_endian",if_true = "LE", if_false = "BE"),
+                     checks.AC_DEFINE("g_bs_alien",condition = "ac_cv_is_little_endian",if_true = "BE", if_false = "LE"),
     ]
 
 
@@ -453,13 +687,32 @@ def gen_glib_conf():
     ]
 
 
-    type_checks = [
-        checks.AC_CHECK_SIZEOF("short"),
-        #TODO check int size
-        checks.AC_DEFINE("gint16", condition = "ac_cv_sizeof_short==2", if_true = "short",if_false = "int"),
+    type_checks = gen_type_checks()
+
+    win_defines = [
+            checks.AC_DEFINE(define = "g_pid_type", value = 'void*'),
+            checks.AC_DEFINE(define = "g_pid_format", value = '"p"'),
+            checks.AC_DEFINE(define = "g_dir_separator", value = '\\\\'),
+            checks.AC_DEFINE(define = "g_searchpath_separator", value = ';'),
+        ]
+
+    
 
 
-    ]
+
+    os_define = select({
+        "windows_x86_64_or_arm64":win_defines + [checks.AC_DEFINE("g_pollfd_format", value = '%#'+int64_m+'x')],
+        "@platforms//os:windows":win_defines + [
+            checks.AC_DEFINE("g_pollfd_format", value = '"%#x"'),
+        ],
+        "//conditions:default":[
+            checks.AC_DEFINE(define = "g_pid_type", value = "int"),
+            checks.AC_DEFINE(define = "g_pid_format", value = '"i"'),
+            checks.AC_DEFINE(define = "g_pollfd_format", value = '"%d"'),
+            checks.AC_DEFINE(define = "g_dir_separator", value = '/'),
+            checks.AC_DEFINE(define = "g_searchpath_separator", value = ':'),
+        ]
+    })
 
 
     autoconf(
@@ -474,17 +727,24 @@ def gen_glib_conf():
             checks.AC_DEFINE("GLIB_MICRO_VERSION", micro_version),
 
             # TODO glib_build_static_only
-        ] + func_checks + endian_checks + type_checks + select(
+        ] + func_checks + endian_checks + type_checks + os_define + select(
             {"@platforms//os:windows":[
                 checks.AC_DEFINE_UNQUOTED("G_PLATFORM_WIN32"),
                 checks.AC_DEFINE_UNQUOTED("G_OS_WIN32")
-            ],
+            ] ,
              # cygwin not supported?
              #"@platforms//os:cygwin":[
              #checks.AC_DEFINE_UNQUOTED("G_OS_UNIX"),
              #checks.AC_DEFINE_UNQUOTED("G_WITH_CYGWIN"),
 
              #],
-            "//conditions:default":[checks.AC_DEFINE_UNQUOTED("G_OS_UNIX")]}),
+            "//conditions:default":[checks.AC_DEFINE_UNQUOTED("G_OS_UNIX")]})+ select({
+                "growing_stack_setting":[
+                    checks.AC_DEFINE("G_HAVE_GROWING_STACK"),
+                ],
+                "//conditions:default":[
+                    checks.AC_DEFINE("G_HAVE_GROWING_STACK", value = 0),
+                ]
+            }),
             visibility = ["//visibility:public"] ,
     )
