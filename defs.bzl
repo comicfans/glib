@@ -252,8 +252,6 @@ gssizebits = ac_cv_sizeof_ssize_t * 8
     return ret
  
 
-def check_header_or_func(func):
-    return checks.AC_CHECK_FUNC(func, define = define_name(func))
 
 
 def define_name(header):
@@ -268,7 +266,7 @@ def gen_glib_conf():
     package_info(
         name = "package_info",
         module_bazel = "//:MODULE.bazel",
-        package_bugreport = '"https://gitlab.gnome.org/GNOME/glib/issues/new"',
+        package_bugreport = 'https://gitlab.gnome.org/GNOME/glib/issues/new',
         package_tarname = '"glib"',
         package_url = '""',
     )
@@ -533,15 +531,15 @@ def gen_glib_conf():
         'sysctlbyname',
     ]
 
-    functions_checks = [check_header_or_func(func) for func in functions] + select({
+    functions_checks = [checks.AC_CHECK_FUNC(func,define = define_name(func)) for func in functions] + select({
                 "@platforms//os:windows":[],
-                "//conditions:default":[check_header_or_func("if_indextoname"),
-                check_header_or_func("if_nametoindex")]
+                "//conditions:default":[checks.AC_CHECK_FUNC("if_indextoname", define = define_name("if_indextoname")),
+                checks.AC_CHECK_FUNC("if_nametoindex", define = define_name("if_nametoindex"))]
             })
 
     #print(functions_checks)
     
-    header_checks = [check_header_or_func(h) for h in headers]
+    header_checks = [checks.AC_CHECK_HEADER(h,define = define_name(h)) for h in headers]
 
     header_cond_checks = [checks.AC_CHECK_FUNC("statvfs", requires = ["HAVE_SYS_STATVFS_H"]),
                            # TODO HAVE_SYS_STATFS_H or HAVE_SYS_MOUNT_H ?
@@ -603,6 +601,191 @@ def gen_glib_conf():
     # TODO assert HAVE_SYS_XATTR_H is 1
 
 
+    sys_checks = [checks.AC_TRY_COMPILE(code='''
+#include <linux/futex.h>
+               #include <sys/syscall.h>
+               #include <unistd.h>
+               int main (int argc, char ** argv) {
+                 syscall (__NR_futex, NULL, FUTEX_WAKE, FUTEX_WAIT);
+                 return 0;
+               }
+                               ''', define = "HAVE_FUTEX"),
+
+
+                  checks.AC_TRY_COMPILE(code = '''
+#include <linux/futex.h>
+               #include <sys/syscall.h>
+               #include <unistd.h>
+               int main (int argc, char ** argv) {
+                 syscall (__NR_futex_time64, NULL, FUTEX_WAKE, FUTEX_WAIT);
+                 return 0;
+               }
+                  ''',define = "HAVE_FUTEX_TIME64"),
+
+                  checks.AC_TRY_LINK(code = '''
+#include <sys/eventfd.h>
+               #include <unistd.h>
+               int main (int argc, char ** argv) {
+                 eventfd (0, EFD_CLOEXEC);
+                 return 0;
+               }
+                                     ''',define = "HAVE_EVENTFD"
+                                     ),
+                  checks.AC_TRY_LINK(code = '''
+#define _GNU_SOURCE
+               #include <poll.h>
+               #include <stddef.h>
+               int main (int argc, char ** argv) {
+                 struct pollfd fds[1] = {{0}};
+                 struct timespec ts = {0};
+                 ppoll (fds, 1, NULL, NULL);
+                 return 0;
+               }
+                                     ''',define = "HAVE_PPOLL"),
+                  checks.AC_TRY_LINK(code = '''
+#include <sys/syscall.h>
+               #include <sys/wait.h>
+               #include <linux/wait.h>
+               #include <unistd.h>
+               int main (int argc, char ** argv) {
+                 siginfo_t child_info = { 0, };
+                 syscall (SYS_pidfd_open, 0, 0);
+                 waitid (P_PIDFD, 0, &child_info, WEXITED | WNOHANG);
+                 return 0;
+               }
+                  ''', define = "HAVE_PIDFD"),
+                  checks.AC_TRY_COMPILE(code='''
+int main() {
+static __uint128_t v1 = 100;
+static __uint128_t v2 = 10;
+static __uint128_t u;
+u = v1 / v2;
+(void) u;
+}
+                  ''',define = "HAVE_UINT128_T"),
+                  checks.AC_TRY_LINK(code='''
+  #include <time.h>
+  struct timespec t;
+  int main (int argc, char ** argv) {
+    return clock_gettime(CLOCK_REALTIME, &t);
+  }
+                  ''',
+                  #TODO meson also try to link with -lrt
+                  define = "HAVE_CLOCK_GETTIME"),
+                  checks.AC_TRY_COMPILE(code='''
+#include <unistd.h>
+                        #ifdef HAVE_SYS_PARAM_H
+                        #include <sys/param.h>
+                        #endif
+                        #ifdef HAVE_SYS_VFS_H
+                        #include <sys/vfs.h>
+                        #endif
+                        #ifdef HAVE_SYS_MOUNT_H
+                        #include <sys/mount.h>
+                        #endif
+                        #ifdef HAVE_SYS_STATFS_H
+                        #include <sys/statfs.h>
+                        #endif
+                        void some_func (void) {
+                          struct statfs st;
+                          statfs("/", &st);
+                        }
+                  ''',name = "ac_cv_statfs_args_2",
+                  compile_defines = ["HAVE_SYS_PARAM_H","HAVE_SYS_VFS_H","HAVE_SYS_MOUNT_H","HAVE_SYS_STATFS_H"]),
+
+                  checks.AC_TRY_COMPILE(code='''
+#include <unistd.h>
+                          #ifdef HAVE_SYS_PARAM_H
+                          #include <sys/param.h>
+                          #endif
+                          #ifdef HAVE_SYS_VFS_H
+                          #include <sys/vfs.h>
+                          #endif
+                          #ifdef HAVE_SYS_MOUNT_H
+                          #include <sys/mount.h>
+                          #endif
+                          #ifdef HAVE_SYS_STATFS_H
+                          #include <sys/statfs.h>
+                          #endif
+                          void some_func (void) {
+                            struct statfs st;
+                            statfs("/", &st, sizeof (st), 0);
+                          }
+                  ''', name = "ac_cv_statfs_args_4",compile_defines = ["HAVE_SYS_PARAM_H","HAVE_SYS_VFS_H","HAVE_SYS_MOUNT_H","HAVE_SYS_STATFS_H"])
+    ] + macros.AC_DEFINE_EXPR(define = ["STATFS_ARGS"],
+    requires = ["ac_cv_statfs_args_2","ac_cv_statfs_args_4"], expr = '''
+if ac_cv_statfs_args_2:
+    STATFS_ARGS=2
+elif ac_cv_statfs_args_4:
+    STATFS_ARGS=4
+else:
+    assert False, 'Unable to determine number of arguments to statfs()'
+    ''') + [
+        checks.AC_TRY_COMPILE(code='''
+#include <fcntl.h>
+                  #include <sys/types.h>
+                  #include <sys/stat.h>
+                  void some_func (void) {
+                    open(".", O_DIRECTORY, 0);
+                  }
+        ''', define = "HAVE_OPEN_O_DIRECTORY"),
+        checks.AC_TRY_COMPILE(code='''
+#include <fcntl.h>
+                  #include <sys/types.h>
+                  #include <sys/stat.h>
+                  void some_func (void) {
+                    fcntl(0, F_FULLFSYNC, 0);
+                  }
+                              ''',define = "HAVE_FCNTL_F_FULLFSYNC"
+        ),
+    ] + select({
+        "@platforms//os:windows":[
+            checks.AC_DEFINE("HAVE_C99_SNPRINTF", 0),
+            checks.AC_DEFINE("HAVE_C99_VSNPRINTF", 0),
+            checks.AC_DEFINE("HAVE_UNIX98_PRINTF", 0),],
+        "@platforms//os:macos":[
+            checks.AC_DEFINE("HAVE_C99_SNPRINTF", 1),
+            checks.AC_DEFINE("HAVE_C99_VSNPRINTF", 1),
+            checks.AC_DEFINE("HAVE_UNIX98_PRINTF", 1),],
+        "//conditions:default":[
+            # TODO, this requires run on target machine, here we assume it's always true
+            checks.AC_DEFINE("HAVE_C99_SNPRINTF", 1),
+            checks.AC_DEFINE("HAVE_C99_VSNPRINTF", 1),
+            checks.AC_DEFINE("HAVE_UNIX98_PRINTF", 1),],
+    }) + [
+        checks.AC_TRY_COMPILE(code="signed char x;", name = "ac_cv_char"),
+        checks.AC_CHECK_TYPE("ptrdiff_t", includes = ["#include <stddef.h>"], define = "HAVE_PTRDIFF_T")
+    ]  + macros.AC_DEFINE_EXPR(define =["signed"], requires = ["ac_cv_char"], expr='''
+if ac_cv_char:
+    signed = None
+else:
+    signed = "/* NOOP */"
+    ''') + [
+        checks.AC_TRY_LINK(code='''
+#include <signal.h>
+               #include <sys/types.h>
+               sig_atomic_t val = 42;
+               int main (int argc, char ** argv) {
+                 return val == 42 ? 0 : 1;
+               }
+        ''', define = "HAVE_SIG_ATOMIC_T"),
+        checks.AC_TRY_COMPILE(code='''
+long long ll = 1LL;
+                  int i = 63;
+                  int some_func (void) {
+                    long long llmax = (long long) -1;
+                    return ll << i | ll >> i | llmax / ll | llmax % ll;
+                  }
+''',define = "HAVE_LONG_LONG"),
+        checks.AC_TRY_COMPILE(code = '''
+/* The Stardent Vistra knows sizeof(long double), but does not support it.  */
+                  long double foo = 0.0;
+                  /* On Ultrix 4.3 cc, long double is 4 and double is 8.  */
+                  int array [2*(sizeof(long double) >= sizeof(double)) - 1];
+                             ''' , define = "HAVE_LONG_DOUBLE"),
+        checks.AC_CHECK_TYPE("wchar_t", define = "HAVE_WCHAR_T", includes = ["#include <stddef.h>"]),
+        checks.AC_CHECK_TYPE("wint_t", define = "HAVE_WINT_T", includes = ["#include <wchar.h>"]),
+    ]
 
 
     autoconf(
@@ -634,7 +817,11 @@ def gen_glib_conf():
         ]+functions_checks + header_checks + header_cond_checks + exeext + sizeof_checks + always_required + xattr_checks + 
             # TODO sunos XOPEN_SOURCE __EXTENSIONS__
 
-        [checks.AC_CHECK_TYPE("PTRACE_O_EXITKILL", includes = ["#include <sys/ptrace.h>"], define = "HAVE_PTRACE_O_EXITKILL")]
+        [checks.AC_CHECK_TYPE("PTRACE_O_EXITKILL", includes = ["#include <sys/ptrace.h>"], define = "HAVE_PTRACE_O_EXITKILL"),
+
+         checks.AC_DEFINE("USE_SYSTEM_PRINTF", requires = ["HAVE_UNIX98_PRINTF","HAVE_C99_SNPRINTF","HAVE_C99_VSNPRINTF"])
+         
+        ] + sys_checks
         ,
 
         #  TODO dtrace
@@ -683,7 +870,8 @@ def gen_glib_conf():
 
 
     func_checks = [
-        checks.AC_CHECK_HEADER("alloca.h",define = "GLIB_HAVE_ALLOCA_H"),
+        checks.AC_CHECK_HEADER("alloca.h"),
+        checks.AC_DEFINE("GLIB_HAVE_ALLOCA_H",condition = 'ac_cv_header_alloca_h', if_true = True, if_false = False),
     ]
 
 
@@ -751,10 +939,11 @@ def gen_glib_conf():
             # TODO glib_build_static_only
         ] + func_checks + endian_checks + type_checks + os_define + select(
             {"@platforms//os:windows":[
-                checks.AC_DEFINE_UNQUOTED("G_PLATFORM_WIN32"),
-                checks.AC_DEFINE_UNQUOTED("G_OS_WIN32"),
+                checks.AC_DEFINE_UNQUOTED("glib_os",'''#define G_PLATFORM_WIN32
+#define G_PLATFORM_WIN32
+'''),
             ] ,
-            "//conditions:default":[checks.AC_DEFINE("G_OS_UNIX"),
+            "//conditions:default":[checks.AC_DEFINE("glib_os", "#define G_OS_UNIX"),
             ]})+ select({
                 "growing_stack_setting":[
                     checks.AC_DEFINE("G_HAVE_GROWING_STACK"),
@@ -762,6 +951,12 @@ def gen_glib_conf():
                 "//conditions:default":[
                     checks.AC_DEFINE("G_HAVE_GROWING_STACK", value = 0),
                 ]
-            }) + poll_checks + inet_checks + ipv6_check,
+            }) + poll_checks + inet_checks + ipv6_check + select({
+                "@platforms//os:windows":[
+                    checks.AC_DEFINE(define = "g_threads_impl_def", value = 'WIN32'),],
+                    "//conditions:default":[
+                    checks.AC_DEFINE(define = "g_threads_impl_def", value = 'POSIX'),]}),
+
+                    
             visibility = ["//visibility:public"] ,
     )
