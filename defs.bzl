@@ -245,7 +245,7 @@ gssizebits = ac_cv_sizeof_ssize_t * 8
         {
             # TODO cygwin
             "@platforms//os:windows": [checks.AC_DEFINE("g_module_suffix",value="dll")],
-            "//conditions:default":[checks.AC_DEFINE("g_module_suffix",value='"so"')]
+            "//conditions:default":[checks.AC_DEFINE("g_module_suffix",value='so')]
         }
     )
 
@@ -714,13 +714,35 @@ def gen_glib_conf():
         ]
     })
 
+    poll_checks = [
+        checks.AC_COMPUTE_INT(define = tuple[1], expression = tuple[0],
+                              includes = ["#include <sys/poll.h>",
+"#include <sys/types.h>"]) for tuple in [("POLLIN","g_pollin"), ("POLLOUT", "g_pollout"), ("POLLPRI", "g_pollpri"), ("POLLERR","g_pollerr"), ("POLLHUP","g_pollhup"),("POLLNVAL", "g_pollnval")]
+    ]
+
+    inet_checks = [
+        checks.AC_COMPUTE_INT(define = tuple[1],expression = tuple[0],includes = ["#include <sys/types.h>", "#include <sys/socket.h>"]) for tuple in [
+            ("AF_UNIX","g_af_unix"),("AF_INET","g_af_inet"),("AF_INET6","g_af_inet6"), ("MSG_OOB","g_msg_oob"),("MSG_PEEK","g_msg_peek"),("MSG_DONTROUTE","g_msg_dontroute")
+        ]
+    ]
+
+    ipv6_check = select({
+        "@platforms//os:windows":[
+            checks.AC_DEFINE(define = "HAVE_IPV6",value = True),
+        ],
+        "//conditions:default":[
+            checks.AC_CHECK_TYPE("struct in6_addr", includes = ["#include <netinet/in.h>"], define = "HAVE_IPV6")
+        ]
+    })
+
 
     autoconf(
         name = "glibconfig_conf",
         checks = [
             checks.AC_DEFINE("LT_CURRENT_MINUS_AGE", soversion),
-            #checks.AC_DEFINE("G_HAVE_FREE_SIZED",
-            #                 condition = "HAVE_FREE_SIZED", if_false=None),
+            checks.AC_CHECK_FUNC("free_sized"),
+            checks.AC_DEFINE("G_HAVE_FREE_SIZED",
+                             condition = "ac_cv_func_free_sized", if_true = True,if_false=False),
             checks.AC_CHECK_FUNC("stpcpy",define = "HAVE_STPCPY"),
             checks.AC_DEFINE("GLIB_MAJOR_VERSION", major_version),
             checks.AC_DEFINE("GLIB_MINOR_VERSION", minor_version),
@@ -730,21 +752,16 @@ def gen_glib_conf():
         ] + func_checks + endian_checks + type_checks + os_define + select(
             {"@platforms//os:windows":[
                 checks.AC_DEFINE_UNQUOTED("G_PLATFORM_WIN32"),
-                checks.AC_DEFINE_UNQUOTED("G_OS_WIN32")
+                checks.AC_DEFINE_UNQUOTED("G_OS_WIN32"),
             ] ,
-             # cygwin not supported?
-             #"@platforms//os:cygwin":[
-             #checks.AC_DEFINE_UNQUOTED("G_OS_UNIX"),
-             #checks.AC_DEFINE_UNQUOTED("G_WITH_CYGWIN"),
-
-             #],
-            "//conditions:default":[checks.AC_DEFINE_UNQUOTED("G_OS_UNIX")]})+ select({
+            "//conditions:default":[checks.AC_DEFINE("G_OS_UNIX"),
+            ]})+ select({
                 "growing_stack_setting":[
                     checks.AC_DEFINE("G_HAVE_GROWING_STACK"),
                 ],
                 "//conditions:default":[
                     checks.AC_DEFINE("G_HAVE_GROWING_STACK", value = 0),
                 ]
-            }),
+            }) + poll_checks + inet_checks + ipv6_check,
             visibility = ["//visibility:public"] ,
     )

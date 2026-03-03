@@ -9,6 +9,13 @@ load("@rules_cc_autoconf//autoconf:autoconf.bzl", "autoconf")
 # False should be fine for most x86/arm
 bool_flag(name = "growing_stack", build_setting_default = False)
 
+bool_flag(name = "little_endian", build_setting_default = True)
+
+config_setting(name = "little_endian_setting",
+                flag_values = {
+                    "little_endian": "true"
+                })
+
 config_setting(name = "growing_stack_setting",
                flag_values = {
                    ":growing_stack": "true",
