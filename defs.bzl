@@ -905,7 +905,7 @@ long long ll = 1LL;
     poll_checks = [
         checks.AC_COMPUTE_INT(define = tuple[1], expression = tuple[0],
                               includes = ["#include <sys/poll.h>",
-"#include <sys/types.h>"]) for tuple in [("POLLIN","g_pollin"), ("POLLOUT", "g_pollout"), ("POLLPRI", "g_pollpri"), ("POLLERR","g_pollerr"), ("POLLHUP","g_pollhup"),("POLLNVAL", "g_pollnval")]
+"#include <sys/types.h>"], requires = ["GLIB_HAVE_SYS_POLL_H","HAVE_SYS_TYPES_H"]) for tuple in [("POLLIN","g_pollin"), ("POLLOUT", "g_pollout"), ("POLLPRI", "g_pollpri"), ("POLLERR","g_pollerr"), ("POLLHUP","g_pollhup"),("POLLNVAL", "g_pollnval")]
     ]
 
     inet_checks = [
