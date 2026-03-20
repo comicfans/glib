@@ -1,8 +1,9 @@
 def _version_repo_impl(repository_ctx):
     # Generate a constant that can be loaded by other rules
-    major,minor,micro = repository_ctx.attr.version.split(".")
-    content = "version=\"{}\"\nmajor_version={}\nminor_version = {}\nmicro_version = {}\n".format(repository_ctx.attr.version, int(major), int(minor),int(micro))
+    major, minor, micro = repository_ctx.attr.version.split(".")
+    content = "version=\"{}\"\nmajor_version={}\nminor_version = {}\nmicro_version = {}\n".format(repository_ctx.attr.version, int(major), int(minor), int(micro))
     repository_ctx.file("version.bzl", content)
+
     # A dummy BUILD file to make it a valid package
     repository_ctx.file("BUILD", "")
 
@@ -21,7 +22,7 @@ def _version_extension_impl(module_ctx):
     for mod in module_ctx.modules:
         if mod.is_root:
             root_version = mod.version
-    
+
     # Create an external repository that holds the version string
     version_repo(name = "version_info", version = root_version)
 

@@ -5,7 +5,7 @@
   "moduleExtensions": {
     "//:version_extension.bzl%version_extension": {
       "general": {
-        "bzlTransitiveDigest": "nMt2nnchC/8G9QPYe6x5D/xoavMR7kevtN+Lo6If1GY=",
+        "bzlTransitiveDigest": "ty/0zM1g5w+1BWc3Z0p3xNqi76D2LUWPSl2fm4VGLjA=",
         "usagesDigest": "tHbTPOgYn0o/qHA0Cz5OI4qKLPUU6bjmpw0yG5ckc5c=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
